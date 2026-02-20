@@ -1,0 +1,78 @@
+name: Safe Download Microsoft Office
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Prepare workspace
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\OfficeSetup
+          New-Item -ItemType Directory -Force -Path C:\OfficeSplit
+
+      - name: Download Office Deployment Tool
+        shell: powershell
+        run: |
+          cd C:\OfficeSetup
+          Invoke-WebRequest -Uri "https://officecdn.microsoft.com/pr/wsus/setup.exe" -OutFile setup.exe
+
+      - name: Create configuration.xml
+        shell: powershell
+        run: |
+          @"
+          <Configuration>
+            <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">
+              <Product ID="O365ProPlusRetail">
+                <Language ID="en-us" />
+                <!-- Exclude rarely used apps to reduce size -->
+                <ExcludeApp ID="Access" />
+                <ExcludeApp ID="Publisher" />
+                <ExcludeApp ID="OneNote" />
+                <ExcludeApp ID="Teams" />
+              </Product>
+            </Add>
+            <Display Level="None" AcceptEULA="TRUE" />
+          </Configuration>
+          "@ | Out-File -Encoding ASCII C:\OfficeSetup\configuration.xml
+
+      - name: Download Office files (silent)
+        shell: powershell
+        run: |
+          cd C:\OfficeSetup
+          .\setup.exe /download configuration.xml
+
+      - name: Split and compress Office into chunks
+        shell: powershell
+        run: |
+          $splitSize = 1000MB
+          $files = Get-ChildItem -Path C:\OfficeSetup -Recurse
+          $archiveIndex = 1
+          $tempDir = "C:\OfficeSplit\part$archiveIndex"
+          New-Item -ItemType Directory -Force -Path $tempDir
+
+          foreach ($file in $files) {
+              Copy-Item $file.FullName -Destination $tempDir
+              $folderSize = (Get-ChildItem $tempDir -Recurse | Measure-Object -Property Length -Sum).Sum
+              if ($folderSize -ge $splitSize) {
+                  Compress-Archive -Path $tempDir\* -DestinationPath C:\OfficeSplit\OfficePart$archiveIndex.zip -Force
+                  Remove-Item $tempDir -Recurse -Force
+                  $archiveIndex++
+                  New-Item -ItemType Directory -Force -Path "C:\OfficeSplit\part$archiveIndex"
+                  $tempDir = "C:\OfficeSplit\part$archiveIndex"
+              }
+          }
+          if (Test-Path $tempDir) {
+              Compress-Archive -Path $tempDir\* -DestinationPath C:\OfficeSplit\OfficePart$archiveIndex.zip -Force
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Office365-Offline-Parts
+          path: C:\OfficeSplit\*.zip
+          retention-days: 90
