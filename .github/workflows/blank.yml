@@ -33,13 +33,19 @@ jobs:
         shell: powershell
         run: |
           @"
-          <Configuration>
-            <Add OfficeClientEdition="64" Channel="CurrentPreview">
+          <Configuration ID="51fab5ac-8cdf-4399-bb5f-bbda954e5497">
+            <Add OfficeClientEdition="64" Channel="CurrentPreview" Version="16.0.19725.20078">
               <Product ID="O365ProPlusRetail">
                 <Language ID="en-us" />
                 <ExcludeApp ID="Access" />
-                <ExcludeApp ID="Publisher" />
+                <ExcludeApp ID="Groove" />
+                <ExcludeApp ID="Lync" />
+                <ExcludeApp ID="M365Companion" />
+                <ExcludeApp ID="OneDrive" />
                 <ExcludeApp ID="OneNote" />
+                <ExcludeApp ID="Outlook" />
+                <ExcludeApp ID="OutlookForWindows" />
+                <ExcludeApp ID="Publisher" />
                 <ExcludeApp ID="Teams" />
               </Product>
             </Add>
