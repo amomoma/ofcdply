@@ -1,4 +1,4 @@
-name: Safe Download Microsoft Office
+name: Safe Download Microsoft Office with 7-Zip
 
 on:
   workflow_dispatch:
@@ -6,21 +6,30 @@ on:
 jobs:
   download:
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
+      # 1️⃣ Prepare workspace directories
       - name: Prepare workspace
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path C:\OfficeSetup
           New-Item -ItemType Directory -Force -Path C:\OfficeSplit
 
+      # 2️⃣ Install 7-Zip via Chocolatey
+      - name: Install 7-Zip
+        shell: powershell
+        run: |
+          choco install 7zip -y
+
+      # 3️⃣ Download Office Deployment Tool
       - name: Download Office Deployment Tool
         shell: powershell
         run: |
           cd C:\OfficeSetup
           Invoke-WebRequest -Uri "https://officecdn.microsoft.com/pr/wsus/setup.exe" -OutFile setup.exe
 
+      # 4️⃣ Create configuration.xml
       - name: Create configuration.xml
         shell: powershell
         run: |
@@ -40,41 +49,25 @@ jobs:
           </Configuration>
           "@ | Out-File -Encoding ASCII C:\OfficeSetup\configuration.xml
 
-      - name: Download Office files (silent)
+      # 5️⃣ Download Office files only (silent)
+      - name: Download Office files
         shell: powershell
         run: |
           cd C:\OfficeSetup
           .\setup.exe /download configuration.xml
 
-      - name: Split and compress Office into chunks
+      # 6️⃣ Split and compress Office with 7-Zip
+      - name: Split and compress Office using 7-Zip
         shell: powershell
         run: |
-          $splitSize = 1000MB
-          $files = Get-ChildItem -Path C:\OfficeSetup -Recurse -File
-          $archiveIndex = 1
-          $tempDir = "C:\OfficeSplit\part$archiveIndex"
-          New-Item -ItemType Directory -Force -Path $tempDir
+          $splitSize = "1000m"  # 1 GB per part
+          $output = "C:\OfficeSplit\OfficePart.7z"
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z -v$splitSize $output C:\OfficeSetup\*
 
-          foreach ($file in $files) {
-              Copy-Item $file.FullName -Destination $tempDir
-              $folderSize = (Get-ChildItem $tempDir -Recurse -File | Measure-Object -Property Length -Sum).Sum
-              if ($folderSize -ge $splitSize) {
-                  Compress-Archive -Path $tempDir\* -DestinationPath C:\OfficeSplit\OfficePart$archiveIndex.zip -Force
-                  Remove-Item $tempDir -Recurse -Force
-                  $archiveIndex++
-                  $tempDir = "C:\OfficeSplit\part$archiveIndex"
-                  New-Item -ItemType Directory -Force -Path $tempDir
-              }
-          }
-
-          # Compress the last remaining part
-          if (Test-Path $tempDir) {
-              Compress-Archive -Path $tempDir\* -DestinationPath C:\OfficeSplit\OfficePart$archiveIndex.zip -Force
-          }
-
-      - name: Upload artifacts
+      # 7️⃣ Upload all 7-Zip parts as artifacts
+      - name: Upload 7-Zip artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Office365-Offline-Parts
-          path: C:\OfficeSplit\*.zip
+          path: C:\OfficeSplit\OfficePart.7z.*
           retention-days: 90
