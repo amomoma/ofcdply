@@ -56,13 +56,14 @@ jobs:
           cd C:\OfficeSetup
           .\setup.exe /download configuration.xml
 
-      # 6️⃣ Split and compress Office with 7-Zip
+      # 6️⃣ Split and compress Office using 7-Zip (fixed)
       - name: Split and compress Office using 7-Zip
         shell: powershell
         run: |
-          $splitSize = "1000m"  # 1 GB per part
+          $splitSize = "1G"                            # 1 GB per part
           $output = "C:\OfficeSplit\OfficePart.7z"
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z -v$splitSize $output C:\OfficeSetup\*
+          $source = "C:\OfficeSetup\*"
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z -v$splitSize "$output" "$source"
 
       # 7️⃣ Upload all 7-Zip parts as artifacts
       - name: Upload 7-Zip artifacts
