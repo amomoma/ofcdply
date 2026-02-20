@@ -1,4 +1,4 @@
-name: Safe Download Microsoft Office with 7-Zip
+name: Download Microsoft Office (Single Archive)
 
 on:
   workflow_dispatch:
@@ -9,27 +9,20 @@ jobs:
     timeout-minutes: 180
 
     steps:
-      # 1️⃣ Prepare workspace directories
+      # 1️⃣ Prepare workspace
       - name: Prepare workspace
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path C:\OfficeSetup
-          New-Item -ItemType Directory -Force -Path C:\OfficeSplit
 
-      # 2️⃣ Install 7-Zip via Chocolatey
-      - name: Install 7-Zip
-        shell: powershell
-        run: |
-          choco install 7zip -y
-
-      # 3️⃣ Download Office Deployment Tool
+      # 2️⃣ Download Office Deployment Tool
       - name: Download Office Deployment Tool
         shell: powershell
         run: |
           cd C:\OfficeSetup
           Invoke-WebRequest -Uri "https://officecdn.microsoft.com/pr/wsus/setup.exe" -OutFile setup.exe
 
-      # 4️⃣ Create configuration.xml
+      # 3️⃣ Create configuration.xml
       - name: Create configuration.xml
         shell: powershell
         run: |
@@ -38,7 +31,6 @@ jobs:
             <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">
               <Product ID="O365ProPlusRetail">
                 <Language ID="en-us" />
-                <!-- Exclude rarely used apps to reduce size -->
                 <ExcludeApp ID="Access" />
                 <ExcludeApp ID="Publisher" />
                 <ExcludeApp ID="OneNote" />
@@ -49,26 +41,23 @@ jobs:
           </Configuration>
           "@ | Out-File -Encoding ASCII C:\OfficeSetup\configuration.xml
 
-      # 5️⃣ Download Office files only (silent)
+      # 4️⃣ Download Office files only
       - name: Download Office files
         shell: powershell
         run: |
           cd C:\OfficeSetup
           .\setup.exe /download configuration.xml
 
-      # 6️⃣ Split and compress Office using 7-Zip (fixed)
-      - name: Split and compress Office using 7-Zip
+      # 5️⃣ Compress entire folder
+      - name: Compress Office folder
         shell: powershell
         run: |
-          $splitSize = "1G"                            # 1 GB per part
-          $output = "C:\OfficeSplit\OfficePart.7z"
-          $source = "C:\OfficeSetup\*"
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z -v$splitSize "$output" "$source"
+          Compress-Archive -Path C:\OfficeSetup\* -DestinationPath C:\OfficeSetup.zip -Force
 
-      # 7️⃣ Upload all 7-Zip parts as artifacts
-      - name: Upload 7-Zip artifacts
+      # 6️⃣ Upload compressed archive
+      - name: Upload Office archive
         uses: actions/upload-artifact@v4
         with:
-          name: Office365-Offline-Parts
-          path: C:\OfficeSplit\OfficePart.7z.*
+          name: Office365-Offline
+          path: C:\OfficeSetup.zip
           retention-days: 90
