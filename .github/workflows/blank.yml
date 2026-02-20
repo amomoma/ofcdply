@@ -1,4 +1,4 @@
-name: Download Microsoft Office (Single Archive)
+name: Download Microsoft Office (Single 7z)
 
 on:
   workflow_dispatch:
@@ -15,14 +15,20 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path C:\OfficeSetup
 
-      # 2️⃣ Download Office Deployment Tool
+      # 2️⃣ Install 7-Zip
+      - name: Install 7-Zip
+        shell: powershell
+        run: |
+          choco install 7zip -y
+
+      # 3️⃣ Download Office Deployment Tool
       - name: Download Office Deployment Tool
         shell: powershell
         run: |
           cd C:\OfficeSetup
           Invoke-WebRequest -Uri "https://officecdn.microsoft.com/pr/wsus/setup.exe" -OutFile setup.exe
 
-      # 3️⃣ Create configuration.xml
+      # 4️⃣ Create configuration.xml
       - name: Create configuration.xml
         shell: powershell
         run: |
@@ -41,23 +47,25 @@ jobs:
           </Configuration>
           "@ | Out-File -Encoding ASCII C:\OfficeSetup\configuration.xml
 
-      # 4️⃣ Download Office files only
+      # 5️⃣ Download Office files only
       - name: Download Office files
         shell: powershell
         run: |
           cd C:\OfficeSetup
           .\setup.exe /download configuration.xml
 
-      # 5️⃣ Compress entire folder
-      - name: Compress Office folder
+      # 6️⃣ Compress entire folder into one 7z archive
+      - name: Compress Office folder (7-Zip)
         shell: powershell
         run: |
-          Compress-Archive -Path C:\OfficeSetup\* -DestinationPath C:\OfficeSetup.zip -Force
+          $source = "C:\OfficeSetup\*"
+          $output = "C:\OfficeSetup.7z"
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z "$output" "$source"
 
-      # 6️⃣ Upload compressed archive
+      # 7️⃣ Upload the 7z archive as artifact
       - name: Upload Office archive
         uses: actions/upload-artifact@v4
         with:
           name: Office365-Offline
-          path: C:\OfficeSetup.zip
+          path: C:\OfficeSetup.7z
           retention-days: 90
